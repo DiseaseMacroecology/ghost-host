@@ -1,0 +1,211 @@
+---
+title: "ghost-host: ED gain due to pleistocene extinctions"
+author: "Maxwell J. Farrell"
+date: "`r format(Sys.time(), '%B %d %Y')`"
+output: 
+  html_document:
+    highlight: default
+    toc: no
+    toc_depth: 3
+    toc_float: true
+    theme: yeti
+urlcolor: blue
+---
+
+<!-- knit with Rscript -e "rmarkdown::render('species_models.Rmd')" -->
+
+<!-- Packages -->
+
+```{r loading packages, echo=F, message=F, warning=F}
+require(ape)
+require(picante)
+require(dplyr)
+require(tidyr)
+require(ggplot2)
+require(phytools)
+require(scales)
+options(scipen=10)
+require(xtable)
+require(kableExtra)
+
+```
+
+<!-- Loading Data -->
+
+```{r loading_data, echo=F, message=F, warning=F}
+
+source("./load_data.R")
+source("./calc_species_variables.R")
+
+```
+
+
+```{r phyloplot, echo=F, eval=F, warning=F}
+
+# plot(tree, show.tip.label=FALSE)
+
+# load droptipTree
+source("./sim_functions.R")
+
+ext <- island$Extinct_or_extant=="Extinct"
+island$binomial[island$Extinct_or_extant=="Extinct"]
+tree$tip.label[ext[match(tree$tip.label,island$binomial)]]
+
+droptipTree(tree=tree, tip=ext[match(tree$tip.label,island$binomial)])
+
+```
+  
+
+## ED Gain due to Pleistocene Extinctions
+
+```{r plot_ED, echo=F}
+
+ggplot(dat, aes(x = ED_ext)) + geom_histogram(binwidth = 0.1, color="black", fill="grey") + scale_x_log10() + theme_classic() + xlab("Extant Evolutionary Distinctiveness (MY)") + ylab("Number of Species") + scale_y_continuous(expand = c(0, 0))
+
+
+# sum(dat$ED_gain!=0)
+
+# ED gain (for species with some ED change)
+dat_nonzeroED <- dat[dat$ED_gain>0,]
+
+ggplot(dat_nonzeroED, aes(x = ED_gain)) + geom_histogram(binwidth = 0.5, color="black", fill="grey") + scale_x_log10() + theme_classic() + xlab("Gain in Evolutionary Distinctiveness (MY)") + ylab("Number of Species") + scale_y_continuous(expand = c(0, 0), limits=c(0,120), breaks=seq(0,120,20))
+
+# ggsave("../plots_tables/ED_gain_hist.png", width=4, height=4)
+# ggsave("../plots_tables/ED_gain_hist.pdf", width=4, height=4)
+
+ED_table <- dat[order(dat$ED_gain, decreasing=T),][1:10,1:4]
+names(ED_table) <- c("Species","ED extant","ED pre-extinction","ED gain")
+ED_table$Species <- gsub("_"," ", ED_table$Species)
+
+print(xtable(ED_table, digits=c(0,0,2,2,2)),file="../plots_tables/ED_table.tex", include.rownames = FALSE)
+
+ED_table %>% kable(., row.names=FALSE,digits=c(0,2,2,2)) %>% kable_styling()
+
+```
+
+
+```{r Elephant_parasites, eval=F, echo=F}
+
+richness[richness$Species=="Elephas_maximus",]
+hp_list[hp_list$host=="Elephas_maximus",]
+mean_spec[mean_spec$Species=="Elephas_maximus",]
+
+
+elephas_paras <- hp_list$parasite[grep("Elephas", hp_list$host)]
+loxo_paras <- hp_list$parasite[grep("Loxodonta", hp_list$host)]
+intersect(elephas_paras, loxo_paras)
+# only two documented shared parasites are Bluetongue and Foot and mouth (transmitted via cattle)
+
+SHP <- host_spec$parasite[host_spec$mpd==0]
+E_maximus_SHP <- hp_list$parasite[hp_list$host=="Elephas_maximus" & hp_list$parasite%in%SHP]
+sort(E_maximus_SHP)
+
+L_africana <- hp_list$parasite[hp_list$host=="Loxodonta_africana" & hp_list$parasite%in%SHP]
+# looks like both elephants have species specific Grammocephalus, Murshidia, Quilonia
+
+# Mauro's paper on hookworm (incl. Grammocephalus): https://www.sciencedirect.com/science/article/pii/S2213224417300081
+
+# Myet Chel et al 2020: "Phylogenetic analysis of the COI genes of Murshidia and Quilonia species from Asian and African elephants revealed parasite speciation in each elephant host. The present study also indicated that several Murshidia and Quilonia species were widely distributed in Asian elephants in Myanmar, providing new insight into control strategies and evolution of cyathostomine gastrointestinal parasites in elephants"
+
+sort(E_maximus_SHP)
+sort(L_africana)
+
+host_spec[host_spec$parasite=="Anoplocephala manubriata",]
+hp_list[hp_list$parasite=="Anoplocephala manubriata",]
+# Only E maximus, but online accounts also include L africana
+
+# "Bifidobacterium boum"
+
+# "Bivitellobilharzia nairi"
+# Brant et al. (2013)found "Bivitellobilharzia loxodontae" from L. cyclotis to be sister taxa to B. nairi, but still distinct species. 
+
+# Choniangium magnostomum
+
+# Cladocoelium elephantis
+
+# Elephantid herpesvirus 1
+# bit of a confusing set of viruses (but with high mortality in asian elephants)
+
+# Equinurbia sipunculiformis
+# Equinurbia blakei n. sp. found in Loxodonta cyclotis"
+
+# Haematomyzus elephantis
+# Hard to find citations, but seems to be scarce records of this infecting African and Asian elephants (but may be in zoos / captive populations)
+
+# Indofilaria elephantis
+# Indofilaria pattabirmani
+# Pfenderius birmanicus
+# Pfenderius heterocaeca
+# Pseudodiscus hawkesi
+# Stephanofilaria srivastavai
+
+
+# Looks like some other parasties are documented only in E maximus, but also seem to have reports online of infections in L africana (ex. elephant herpesvirus 1)
+
+E_maximus_spec <- host_spec[host_spec$parasite %in% hp_list$parasite[hp_list$host=="Elephas_maximus"],]
+
+View(E_maximus_spec)
+
+# Hawkesius hawkesi"
+hp_list[hp_list$parasite=="Hawkesius hawkesi",]
+# https://books.google.ca/books?id=qfiCDwAAQBAJ&pg=PA350&lpg=PA350&dq=Hawkesius+hawkesi+rhino&source=bl&ots=gjz-VpHHmK&sig=ACfU3U1FaYPDbfTCF_kNdnGIvAdMRTcI-g&hl=en&sa=X&ved=2ahUKEwjqwYyCv93kAhVAUBUIHVLsBkMQ6AEwAHoECAkQAQ#v=onepage&q=Hawkesius%20hawkesi%20rhino&f=false
+
+# Found in Elephas_maximus and Rhinoceros_unicornis 
+
+# looks like some evidence of these found in african elephants...
+
+# Homalogaster paloniae"
+hp_list[hp_list$parasite=="Homalogaster paloniae",]
+
+# Pfenderius papillatus"
+hp_list[hp_list$parasite=="Pfenderius papillatus",]
+# Found in Elephas_maximus and Dicerorhinus_sumatrensis 
+
+# Pseudodiscus collinsi"
+hp_list[hp_list$parasite=="Pseudodiscus collinsi",]
+
+# Schistosoma indicum"
+hp_list[hp_list$parasite=="Schistosoma indicum",]
+
+# Stephanofilaria assamensis"
+hp_list[hp_list$parasite=="Stephanofilaria assamensis",]
+
+
+names(traits)
+unique(traits$IUCN.Status.1.2)
+
+noRL <- traits[traits$IUCN.Status.1.2%in%c("LC","NT"),]
+
+hp_list_noRL <- hp_list[hp_list$host%in%noRL$Binomial.1.2,]
+dim(hp_list_noRL)
+dim(hp_list)
+
+plot(table(traits$IUCN.Status.1.2))
+
+noEX <- traits[traits$IUCN.Status.1.2%in%c("LC","NT","VU","EN","CR"),]
+
+plot(table(noEX$IUCN.Status.1.2))
+noEX$IUCN.Status.1.2 <- factor(noEX$IUCN.Status.1.2, levels = c("LC","NT","VU","EN","CR"))
+
+# pdf("IUCN_barplot.pdf")
+# barplot(table(noEX$IUCN.Status.1.2))
+# dev.off()
+
+
+# Proportional ED gain
+dat$ED_gain_prop <- with(dat, ED_gain/ED)
+
+ggplot(dat, aes(x = ED_gain_prop)) + geom_histogram(binwidth = 0.5, color="black", fill="grey") + scale_x_log10() + theme_minimal() + xlab("Proportional Gain in Evolutionary Distinctiveness") + ylab("Number of Species")
+
+dat[order(dat$ED_gain_prop, decreasing=T),][1:10,]
+
+
+
+
+```
+<!-- 
+
+Anoplocephala manubriata: tapeworm of elephants
+
+
+ -->

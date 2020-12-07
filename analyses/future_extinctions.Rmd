@@ -1,0 +1,304 @@
+---
+title: "ghost-host: Impact of future extinctions"
+author: "Maxwell J. Farrell"
+date: "`r format(Sys.time(), '%B %d %Y')`"
+output: 
+  html_document:
+    highlight: default
+    toc: no
+    toc_depth: 3
+    toc_float: true
+    theme: yeti
+urlcolor: blue
+---
+
+<!-- knit with Rscript -e "rmarkdown::render('species_models.Rmd')" -->
+
+<!-- Packages -->
+
+```{r loading packages, echo=F, message=F, warning=F}
+require(ape)
+require(picante)
+require(dplyr)
+require(tidyr)
+require(ggplot2)
+require(phytools)
+require(scales)
+options(scipen=10)
+require(xtable)
+require(kableExtra)
+
+```
+
+<!-- Loading Data -->
+
+```{r loading_data, echo=F, message=F, warning=F}
+
+source("./load_data.R")
+source("./calc_species_variables.R")
+
+```
+
+
+```{r sim_extinctions, echo=F, eval=F}
+
+# unique(traits$IUCN.Status.1.2)
+# noEX$IUCN.Status.1.2 <- factor(noEX$IUCN.Status.1.2, levels = c("DD","LC","NT","VU","EN","CR"))
+# plot(table(noEX$IUCN.Status.1.2))
+
+# Calculate host specificities per parasite after extinction
+
+# Setting domestic species to be "LC"
+traits$IUCN.Status.1.2[traits$Binomial.1.2%in%dom$host] <- "LC"
+
+
+if (!file.exists("host_specificities_sim_extinction.rds")) {
+
+calc_specificities <- function(hp_list, phylo){
+
+    # Calculating clade matrix once for whole phylo 
+    clade_mat <- clade.matrix(phylo)
+    
+    host_spec <- data.frame(parasite=sort(unique(hp_list$parasite)))
+    
+    # pd total
+    pd_total <- pd.calc(clade_mat)
+    
+    host_pd <- sapply(host_spec$parasite, function(para) 
+    
+          as.numeric(pd.calc(clade_mat, tip.subset=hp_list$host[hp_list$parasite==para], root.edge=FALSE))
+    
+          ) 
+        
+    coph <- cophenetic(phylo)
+    
+    host_mpd <- sapply(host_spec$parasite, function(para) 
+    
+              mean(coph[rownames(coph)%in%hp_list$host[hp_list$parasite==para],
+                        colnames(coph)%in%hp_list$host[hp_list$parasite==para]])
+          ) 
+        
+    min_above_zero <- function(x){
+    
+      if (length(x)>1) {
+        min(x[x>0])
+      } else {0}
+    
+    }
+        
+    host_mntd <- sapply(host_spec$parasite, function(para) 
+    
+              min_above_zero(coph[rownames(coph)%in%hp_list$host[hp_list$parasite==para], 
+                colnames(coph)%in%hp_list$host[hp_list$parasite==para]])
+          ) 
+    
+    
+    host_maxD <- sapply(host_spec$parasite, function(para) 
+    
+              max(coph[rownames(coph)%in%hp_list$host[hp_list$parasite==para], 
+                colnames(coph)%in%hp_list$host[hp_list$parasite==para]])
+          ) 
+    
+    
+    host_spec <- data.frame(parasite=sort(unique(hp_list$parasite)),
+                            mpd=host_mpd, mntd=host_mntd, maxD=host_maxD)
+    
+    host_spec$creepjump <- with(host_spec, mntd/maxD)
+    host_spec$creepjump[is.na(host_spec$creepjump)] <- 0
+
+    return(host_spec)    
+
+}
+
+# Setting domestic species to be "LC"
+traits$IUCN.Status.1.2[traits$Binomial.1.2%in%dom$host] <- "LC"
+
+# baseline: up to and including CR (no EX or EW species)
+CR <- traits[traits$IUCN.Status.1.2%in%c("DD","LC","NT","VU","EN","CR"),]
+hp_list_small <- hp_list[hp_list$host%in%CR$Binomial.1.2,]
+tree_small <- drop.tip(tree, setdiff(tree$tip.label,CR$Binomial.1.2))
+CR_host_spec <- calc_specificities(hp_list_small, tree_smal)
+names(CR_host_spec)[2:5] <- paste0(names(CR_host_spec)[2:5],"_CR")
+
+# up to and including EN (no CR, EX or EW species)
+EN <- traits[traits$IUCN.Status.1.2%in%c("DD","LC","NT","VU","EN"),]
+hp_list_small <- hp_list[hp_list$host%in%EN$Binomial.1.2,]
+tree_small <- drop.tip(tree, setdiff(tree$tip.label,EN$Binomial.1.2))
+EN_host_spec <- calc_specificities(hp_list_small, tree_small)
+names(EN_host_spec)[2:5] <- paste0(names(EN_host_spec)[2:5],"_EN")
+
+# up to and including VU (no EN, CR, EX or EW species)
+VU <- traits[traits$IUCN.Status.1.2%in%c("DD","LC","NT","VU"),]
+hp_list_small <- hp_list[hp_list$host%in%VU$Binomial.1.2,]
+tree_small <- drop.tip(tree, setdiff(tree$tip.label,VU$Binomial.1.2))
+VU_host_spec <- calc_specificities(hp_list_small, tree_small)
+names(VU_host_spec)[2:5] <- paste0(names(VU_host_spec)[2:5],"_VU")
+
+# up to and including NT (no VU, EN, CR, EX or EW species)
+NT <- traits[traits$IUCN.Status.1.2%in%c("DD","LC","NT"),]
+hp_list_small <- hp_list[hp_list$host%in%NT$Binomial.1.2,]
+tree_small <- drop.tip(tree, setdiff(tree$tip.label,NT$Binomial.1.2))
+NT_host_spec <- calc_specificities(hp_list_small, tree_small)
+names(NT_host_spec)[2:5] <- paste0(names(NT_host_spec)[2:5],"_NT")
+
+# up to and including LC (no NT, VU, EN, CR, EX or EW species)
+LC <- traits[traits$IUCN.Status.1.2%in%c("DD","LC"),]
+hp_list_small <- hp_list[hp_list$host%in%LC$Binomial.1.2,]
+tree_small <- drop.tip(tree, setdiff(tree$tip.label,LC$Binomial.1.2))
+LC_host_spec <- calc_specificities(hp_list_small, tree_small)
+names(LC_host_spec)[2:5] <- paste0(names(LC_host_spec)[2:5],"_LC")
+
+sim_ext <- left_join(CR_host_spec, EN_host_spec)
+sim_ext <- left_join(sim_ext, VU_host_spec)
+sim_ext <- left_join(sim_ext, NT_host_spec)
+sim_ext <- left_join(sim_ext, LC_host_spec)
+
+saveRDS(sim_ext, "host_specificities_sim_extinction.rds")
+
+} else {sim_ext <- readRDS("host_specificities_sim_extinction.rds")}
+
+
+```
+
+```{r plots, echo=F, eval=T}
+
+sim_ext <- readRDS("host_specificities_sim_extinction.rds")
+
+# (apply(sim_ext, 2, function(x) sum(is.na(x)))/nrow(sim_ext))*100
+# at most severe scenario 13% of parasite species go extinct (1,190 parasites)
+
+# with(sim_ext, plot(mpd_CR, mpd_LC))
+# with(sim_ext, plot(mntd_CR, mntd_LC))
+# with(sim_ext, plot(creepjump_CR, creepjump_LC))
+# with(sim_ext, plot(maxD_CR, maxD_LC))
+
+# names(sim_ext)
+# ggplot(sim_ext, aes(mpd_CR, mpd_EN)) + geom_point(alpha=0.1) + theme_minimal()
+# ggplot(sim_ext, aes(mpd_CR, mpd_VU)) + geom_point(alpha=0.1) + theme_minimal()
+# ggplot(sim_ext, aes(mpd_CR, mpd_NT)) + geom_point(alpha=0.1) + theme_minimal()
+
+
+sim_ext$NT_loss <- sim_ext$mpd_LC-sim_ext$mpd_CR
+
+
+# ggplot(sim_ext, aes(mpd_CR, mpd_LC, color=NT_loss)) + geom_point(alpha=0.2) + theme_bw() + 
+#                                       xlab("MPD: No extinction") + ylab("MPD: CR+EN+VU+NT extinction") +
+#                                       geom_text(aes(label=ifelse(parasite%in%c("Ophidascaris robertsi", "Neodiplostomum intermedium"),as.character(parasite),'')),hjust=0,vjust=-0.5) + scale_colour_gradient2(low = muted("red"),
+#                                                                              mid = "grey",
+#                                                                              high = "blue")
+
+ggplot(sim_ext, aes(mpd_CR, mpd_LC)) + geom_point(alpha=0.2) + theme_classic() + 
+                                      xlab("MPD: No extinction") + ylab("MPD: CR+EN+VU+NT extinction") +
+                                      geom_text(aes(label=ifelse(parasite%in%c("Ophidascaris robertsi", "Neodiplostomum intermedium"),as.character(parasite),'')),hjust=0,vjust=-0.5) 
+
+ggsave("../plots_tables/mpd_change_XYplot.pdf", width=7, height=6)
+ggsave("../plots_tables/mpd_change_XYplot.png", width=7, height=6)
+
+
+
+mpd_diffs <- with(sim_ext, data.frame(parasite=parasite,
+                                      CR_loss=mpd_EN-mpd_CR,
+                                      EN_loss=mpd_VU-mpd_CR,
+                                      VU_loss=mpd_NT-mpd_CR,
+                                      NT_loss=mpd_LC-mpd_CR))
+# hist(mpd_diffs$CR_loss)
+# hist(mpd_diffs$EN_loss)
+# hist(mpd_diffs$VU_loss)
+# hist(mpd_diffs$NT_loss)
+
+
+mpd_diffs <- mpd_diffs %>%
+                gather(key, value, -parasite) 
+
+# head(mpd_diffs)
+
+mpd_diffs$key <- factor(mpd_diffs$key, levels = c("CR_loss","EN_loss","VU_loss","NT_loss"))
+# ggplot(mpd_diffs, aes(key, value)) + geom_violin() + theme_minimal()
+
+mpd_diffs_nonzero <- mpd_diffs[mpd_diffs$value!=0 & !is.na(mpd_diffs$value),]
+
+ggplot(mpd_diffs_nonzero, aes(key, value)) + geom_violin() + theme_classic() + 
+        scale_x_discrete(labels=c("CR","CR+EN","CR+EN+VU","CR+EN+VU+NT")) + xlab("Extinction scenario") + ylab("Change in MPD")
+
+ggsave("../plots_tables/mpd_changes.pdf", width=8, height=4)
+ggsave("../plots_tables/mpd_changes.png", width=8, height=4)
+
+
+# hist(with(sim_ext, mpd_LC-mpd_CR))
+# mean(with(sim_ext, mpd_LC-mpd_CR), na.rm=T)#-3
+# var(with(sim_ext, mpd_LC-mpd_CR), na.rm=T)#-3
+# range(with(sim_ext, mpd_LC-mpd_CR), na.rm=T)#-3
+
+mpd_change <- sim_ext$mpd_LC - sim_ext$mpd_CR
+names(mpd_change) <- sim_ext$parasite
+
+mpd_change_table <- rev(sort(mpd_change))
+
+
+source("sim_functions.R")
+
+# MOST MPD GAINED
+# head(mpd_change_table, 15)
+
+# par(mfrow=c(1,1))
+
+# hp_list[hp_list$parasite=="Ophidascaris robertsi",]
+tmp_hosts <- hp_list$host[hp_list$parasite=="Ophidascaris robertsi"]
+
+tmp_tree <- drop.tip(tree, setdiff(tree$tip.label,tmp_hosts))
+treeA <- drop.tip(tree, setdiff(tree$tip.label,tmp_hosts))
+tmp_traits <- traits[traits$Binomial.1.2%in%tmp_hosts,]
+tmp_LC <- tmp_traits[tmp_traits$IUCN.Status.1.2%in%c("DD","LC"),]
+
+droptipTree(tree=tmp_tree, tip=tmp_tree$tip.label[!tmp_tree$tip.label%in%tmp_LC$Binomial.1.2], tip.labs=TRUE)
+
+pdf("../plots_tables/Ophidascaris_extinction.pdf", width=10, height=5)
+droptipTree(tree=tmp_tree, tip=tmp_tree$tip.label[!tmp_tree$tip.label%in%tmp_LC$Binomial.1.2], tip.labs=TRUE)
+add.scale.bar(1, 1, length = 10)
+dev.off()
+
+# MOST MPD LOST
+# tail(mpd_change_table, 15)
+
+# hp_list[hp_list$parasite=="Neodiplostomum intermedium",]
+tmp_hosts <- hp_list$host[hp_list$parasite=="Neodiplostomum intermedium"]
+# also a rodent / marsupial example - maybe good to pair with Ophidascaris! (D. maculatus infected by both)
+
+tmp_tree <- drop.tip(tree, setdiff(tree$tip.label,tmp_hosts))
+treeB <- drop.tip(tree, setdiff(tree$tip.label,tmp_hosts))
+tmp_traits <- traits[traits$Binomial.1.2%in%tmp_hosts,]
+tmp_LC <- tmp_traits[tmp_traits$IUCN.Status.1.2%in%c("DD","LC"),]
+
+# droptipTree(tree=tmp_tree, tip=tmp_tree$tip.label[!tmp_tree$tip.label%in%tmp_LC$Binomial.1.2], tip.labs=TRUE)
+
+pdf("../plots_tables/Neodiplostomum_extinction.pdf", width=7.28054784897, height=3.35)
+droptipTree(tree=tmp_tree, tip=tmp_tree$tip.label[!tmp_tree$tip.label%in%tmp_LC$Binomial.1.2], tip.labs=TRUE)
+add.scale.bar(1, 1, length = 10)
+dev.off()
+
+# pdf("../plots_tables/kronoviz.pdf", width=10, height=10)
+# par(mar=c(5.1, 4.1, 4.1, 6.1))
+# kronoviz(c(treeA, treeB), show.tip.label = TRUE)
+# dev.off()
+
+# args(kronoviz)
+
+
+
+# sim_ext <- sim_ext %>%
+#                 gather(key, value, -parasite) %>%
+#                 separate(key, into = c("metric", "scenario"), sep = "_") 
+
+# sim_ext$scenario <- factor(sim_ext$scenario, levels = c("CR","EN","VU","NT","LC"))
+
+# sort(unique(sim_ext$metric))
+# ggplot(sim_ext[sim_ext$metric=="mpd",], aes(scenario, value)) + geom_violin() + scale_y_continuous(trans='log10')
+# ggplot(sim_ext[sim_ext$metric=="mntd",], aes(scenario, value)) + geom_violin() + scale_y_continuous(trans='log10')
+# ggplot(sim_ext[sim_ext$metric=="maxD",], aes(scenario, value)) + geom_violin()
+# ggplot(sim_ext[sim_ext$metric=="creepjump",], aes(scenario, value)) + geom_violin()
+
+
+
+
+```
+
