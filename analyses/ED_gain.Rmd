@@ -114,71 +114,11 @@ host_spec[host_spec$parasite=="Anoplocephala manubriata",]
 hp_list[hp_list$parasite=="Anoplocephala manubriata",]
 # Only E maximus, but online accounts also include L africana
 
-# "Bifidobacterium boum"
-
-# "Bivitellobilharzia nairi"
-# Brant et al. (2013)found "Bivitellobilharzia loxodontae" from L. cyclotis to be sister taxa to B. nairi, but still distinct species. 
-
-# Choniangium magnostomum
-
-# Cladocoelium elephantis
-
-# Elephantid herpesvirus 1
-# bit of a confusing set of viruses (but with high mortality in asian elephants)
-
-# Equinurbia sipunculiformis
-# Equinurbia blakei n. sp. found in Loxodonta cyclotis"
-
-# Haematomyzus elephantis
-# Hard to find citations, but seems to be scarce records of this infecting African and Asian elephants (but may be in zoos / captive populations)
-
-# Indofilaria elephantis
-# Indofilaria pattabirmani
-# Pfenderius birmanicus
-# Pfenderius heterocaeca
-# Pseudodiscus hawkesi
-# Stephanofilaria srivastavai
-
-
-# Looks like some other parasties are documented only in E maximus, but also seem to have reports online of infections in L africana (ex. elephant herpesvirus 1)
-
-E_maximus_spec <- host_spec[host_spec$parasite %in% hp_list$parasite[hp_list$host=="Elephas_maximus"],]
-
-View(E_maximus_spec)
-
-# Hawkesius hawkesi"
-hp_list[hp_list$parasite=="Hawkesius hawkesi",]
-# https://books.google.ca/books?id=qfiCDwAAQBAJ&pg=PA350&lpg=PA350&dq=Hawkesius+hawkesi+rhino&source=bl&ots=gjz-VpHHmK&sig=ACfU3U1FaYPDbfTCF_kNdnGIvAdMRTcI-g&hl=en&sa=X&ved=2ahUKEwjqwYyCv93kAhVAUBUIHVLsBkMQ6AEwAHoECAkQAQ#v=onepage&q=Hawkesius%20hawkesi%20rhino&f=false
-
-# Found in Elephas_maximus and Rhinoceros_unicornis 
-
-# looks like some evidence of these found in african elephants...
-
-# Homalogaster paloniae"
-hp_list[hp_list$parasite=="Homalogaster paloniae",]
-
-# Pfenderius papillatus"
-hp_list[hp_list$parasite=="Pfenderius papillatus",]
-# Found in Elephas_maximus and Dicerorhinus_sumatrensis 
-
-# Pseudodiscus collinsi"
-hp_list[hp_list$parasite=="Pseudodiscus collinsi",]
-
-# Schistosoma indicum"
-hp_list[hp_list$parasite=="Schistosoma indicum",]
-
-# Stephanofilaria assamensis"
-hp_list[hp_list$parasite=="Stephanofilaria assamensis",]
-
-
-names(traits)
 unique(traits$IUCN.Status.1.2)
 
 noRL <- traits[traits$IUCN.Status.1.2%in%c("LC","NT"),]
 
 hp_list_noRL <- hp_list[hp_list$host%in%noRL$Binomial.1.2,]
-dim(hp_list_noRL)
-dim(hp_list)
 
 plot(table(traits$IUCN.Status.1.2))
 
@@ -203,9 +143,3 @@ dat[order(dat$ED_gain_prop, decreasing=T),][1:10,]
 
 
 ```
-<!-- 
-
-Anoplocephala manubriata: tapeworm of elephants
-
-
- -->

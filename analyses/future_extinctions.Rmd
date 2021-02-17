@@ -42,12 +42,7 @@ source("./calc_species_variables.R")
 
 ```{r sim_extinctions, echo=F, eval=F}
 
-# unique(traits$IUCN.Status.1.2)
-# noEX$IUCN.Status.1.2 <- factor(noEX$IUCN.Status.1.2, levels = c("DD","LC","NT","VU","EN","CR"))
-# plot(table(noEX$IUCN.Status.1.2))
-
 # Calculate host specificities per parasite after extinction
-
 # Setting domestic species to be "LC"
 traits$IUCN.Status.1.2[traits$Binomial.1.2%in%dom$host] <- "LC"
 
@@ -70,7 +65,7 @@ calc_specificities <- function(hp_list, phylo){
     
           ) 
         
-    coph <- cophenetic(phylo)
+    coph <- cophenetic(phylo) #slow that this is inside the function, but okay for now...
     
     host_mpd <- sapply(host_spec$parasite, function(para) 
     
@@ -117,7 +112,7 @@ traits$IUCN.Status.1.2[traits$Binomial.1.2%in%dom$host] <- "LC"
 CR <- traits[traits$IUCN.Status.1.2%in%c("DD","LC","NT","VU","EN","CR"),]
 hp_list_small <- hp_list[hp_list$host%in%CR$Binomial.1.2,]
 tree_small <- drop.tip(tree, setdiff(tree$tip.label,CR$Binomial.1.2))
-CR_host_spec <- calc_specificities(hp_list_small, tree_smal)
+CR_host_spec <- calc_specificities(hp_list_small, tree_small)
 names(CR_host_spec)[2:5] <- paste0(names(CR_host_spec)[2:5],"_CR")
 
 # up to and including EN (no CR, EX or EW species)
@@ -164,36 +159,22 @@ saveRDS(sim_ext, "host_specificities_sim_extinction.rds")
 
 sim_ext <- readRDS("host_specificities_sim_extinction.rds")
 
-# (apply(sim_ext, 2, function(x) sum(is.na(x)))/nrow(sim_ext))*100
-# at most severe scenario 13% of parasite species go extinct (1,190 parasites)
+# joining simulated extinctions with contemporary host specificities ("host_spec")
+sim_ext <- left_join(host_spec, sim_ext)
 
-# with(sim_ext, plot(mpd_CR, mpd_LC))
-# with(sim_ext, plot(mntd_CR, mntd_LC))
-# with(sim_ext, plot(creepjump_CR, creepjump_LC))
-# with(sim_ext, plot(maxD_CR, maxD_LC))
+diffs <- sim_ext$mpd_CR - sim_ext$mpd
+names(diffs) <- sim_ext$parasite
+hp_list[hp_list$parasite %in% names(sort(diffs))[1],]
 
-# names(sim_ext)
-# ggplot(sim_ext, aes(mpd_CR, mpd_EN)) + geom_point(alpha=0.1) + theme_minimal()
-# ggplot(sim_ext, aes(mpd_CR, mpd_VU)) + geom_point(alpha=0.1) + theme_minimal()
-# ggplot(sim_ext, aes(mpd_CR, mpd_NT)) + geom_point(alpha=0.1) + theme_minimal()
-
-
-sim_ext$NT_loss <- sim_ext$mpd_LC-sim_ext$mpd_CR
-
-
-# ggplot(sim_ext, aes(mpd_CR, mpd_LC, color=NT_loss)) + geom_point(alpha=0.2) + theme_bw() + 
-#                                       xlab("MPD: No extinction") + ylab("MPD: CR+EN+VU+NT extinction") +
-#                                       geom_text(aes(label=ifelse(parasite%in%c("Ophidascaris robertsi", "Neodiplostomum intermedium"),as.character(parasite),'')),hjust=0,vjust=-0.5) + scale_colour_gradient2(low = muted("red"),
-#                                                                              mid = "grey",
-#                                                                              high = "blue")
+# hp-List includes recently extinct species, use mpd_CR to represent contemporary HP interactions.
 
 ggplot(sim_ext, aes(mpd_CR, mpd_LC)) + geom_point(alpha=0.2) + theme_classic() + 
                                       xlab("MPD: No extinction") + ylab("MPD: CR+EN+VU+NT extinction") +
-                                      geom_text(aes(label=ifelse(parasite%in%c("Ophidascaris robertsi", "Neodiplostomum intermedium"),as.character(parasite),'')),hjust=0,vjust=-0.5) 
+                                      geom_text(aes(label=ifelse(parasite%in%c("Ophidascaris robertsi", "Neodiplostomum intermedium"),as.character(parasite),'')),hjust=0,vjust=-0.5) +  
+                                      geom_point(data=sim_ext[sim_ext$parasite%in%c("Ophidascaris robertsi", "Neodiplostomum intermedium"),], aes(mpd_CR, mpd_LC), color='dodgerblue2', size=2)
 
 ggsave("../plots_tables/mpd_change_XYplot.pdf", width=7, height=6)
 ggsave("../plots_tables/mpd_change_XYplot.png", width=7, height=6)
-
 
 
 mpd_diffs <- with(sim_ext, data.frame(parasite=parasite,
@@ -201,46 +182,42 @@ mpd_diffs <- with(sim_ext, data.frame(parasite=parasite,
                                       EN_loss=mpd_VU-mpd_CR,
                                       VU_loss=mpd_NT-mpd_CR,
                                       NT_loss=mpd_LC-mpd_CR))
-# hist(mpd_diffs$CR_loss)
-# hist(mpd_diffs$EN_loss)
-# hist(mpd_diffs$VU_loss)
-# hist(mpd_diffs$NT_loss)
-
 
 mpd_diffs <- mpd_diffs %>%
                 gather(key, value, -parasite) 
 
-# head(mpd_diffs)
-
 mpd_diffs$key <- factor(mpd_diffs$key, levels = c("CR_loss","EN_loss","VU_loss","NT_loss"))
-# ggplot(mpd_diffs, aes(key, value)) + geom_violin() + theme_minimal()
 
 mpd_diffs_nonzero <- mpd_diffs[mpd_diffs$value!=0 & !is.na(mpd_diffs$value),]
 
-ggplot(mpd_diffs_nonzero, aes(key, value)) + geom_violin() + theme_classic() + 
-        scale_x_discrete(labels=c("CR","CR+EN","CR+EN+VU","CR+EN+VU+NT")) + xlab("Extinction scenario") + ylab("Change in MPD")
+require(ggallin) # for pseudolog10_trans - doesn't look as nice though (can't see outliers)
+require(ggforce)
 
-ggsave("../plots_tables/mpd_changes.pdf", width=8, height=4)
-ggsave("../plots_tables/mpd_changes.png", width=8, height=4)
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7") # with grey as first instead of black ("#000000")
+
+mpd_changes_plot <- ggplot(mpd_diffs_nonzero, aes(key, value)) + 
+                        geom_violin(aes(colour=key, fill=key), alpha=0.8) + 
+                        theme_classic() + theme(legend.position = "none") + 
+                        scale_x_discrete(labels=c("CR","CR+EN","CR+EN+VU","CR+EN+VU+NT")) + 
+                        xlab("Extinction scenario") + ylab("Change in MPD") + 
+                        scale_colour_manual(values=cbPalette[c(3,4,2,7)]) +
+                        scale_fill_manual(values=cbPalette[c(3,4,2,7)]) 
 
 
-# hist(with(sim_ext, mpd_LC-mpd_CR))
-# mean(with(sim_ext, mpd_LC-mpd_CR), na.rm=T)#-3
-# var(with(sim_ext, mpd_LC-mpd_CR), na.rm=T)#-3
-# range(with(sim_ext, mpd_LC-mpd_CR), na.rm=T)#-3
+ggsave("../plots_tables/mpd_changes.pdf", mpd_changes_plot, width=5, height=3)
+ggsave("../plots_tables/mpd_changes.png", mpd_changes_plot, width=5, height=3)
+
+
+# Picking out example phylogenies
 
 mpd_change <- sim_ext$mpd_LC - sim_ext$mpd_CR
 names(mpd_change) <- sim_ext$parasite
-
 mpd_change_table <- rev(sort(mpd_change))
-
 
 source("sim_functions.R")
 
 # MOST MPD GAINED
 # head(mpd_change_table, 15)
-
-# par(mfrow=c(1,1))
 
 # hp_list[hp_list$parasite=="Ophidascaris robertsi",]
 tmp_hosts <- hp_list$host[hp_list$parasite=="Ophidascaris robertsi"]
@@ -262,7 +239,7 @@ dev.off()
 
 # hp_list[hp_list$parasite=="Neodiplostomum intermedium",]
 tmp_hosts <- hp_list$host[hp_list$parasite=="Neodiplostomum intermedium"]
-# also a rodent / marsupial example - maybe good to pair with Ophidascaris! (D. maculatus infected by both)
+# also a rodent / marsupial example - good to pair with Ophidascaris! (D. maculatus infected by both)
 
 tmp_tree <- drop.tip(tree, setdiff(tree$tip.label,tmp_hosts))
 treeB <- drop.tip(tree, setdiff(tree$tip.label,tmp_hosts))
@@ -299,6 +276,101 @@ dev.off()
 
 
 
-
 ```
 
+
+```{r ordered_extinction, echo=F, eval=T}
+
+calc_mpd <- function(hp_list, coph){
+
+    host_spec <- data.frame(parasite=sort(unique(hp_list$parasite)))
+        
+    host_mpd <- sapply(host_spec$parasite, function(para) 
+    
+              mean(coph[rownames(coph)%in%hp_list$host[hp_list$parasite==para],
+                        colnames(coph)%in%hp_list$host[hp_list$parasite==para]])
+          ) 
+        
+    host_spec <- data.frame(parasite=sort(unique(hp_list$parasite)),
+                            mpd=host_mpd)
+    return(host_spec)    
+}
+
+
+# simulations only for T. cruzi
+# baseline: up to and including CR (no EX or EW species)
+base <- traits[traits$IUCN.Status.1.2%in%c("DD","LC","NT","VU","EN","CR"),]
+hp_list_small <- hp_list[hp_list$host%in%base$Binomial.1.2,]
+tree_small <- drop.tip(tree, setdiff(tree$tip.label,base$Binomial.1.2))
+coph <- cophenetic(tree_small)
+base_mpd <- calc_mpd(hp_list_small, coph)
+
+LC_hosts <- unique(base$Binomial.1.2[base$IUCN.Status.1.2%in%c("CR", "EN", "VU","NT")])
+
+dom_humans <- c(unique(dom$host), "Homo_sapiens")
+
+paras_impacted <- "Trypanosoma cruzi"
+hp_list_impacted <- hp_list_small[hp_list_small$parasite%in%paras_impacted,]
+hosts_lost <- unique(hp_list_impacted$host)
+
+# remove dom + humans
+hosts_lost <- setdiff(hosts_lost, dom_humans)
+
+coph <- cophenetic(tree)
+
+t_cruzi <- base_mpd[base_mpd$parasite %in% paras_impacted,]
+t_cruzi$n_hosts_removed <- 0
+t_cruzi$rep_n <- 0
+
+t_cruzi_noext <- t_cruzi
+
+set.seed(1989)
+
+n_rep <- 200
+
+for (j in 1:n_rep) {
+
+      ext_order <- sample(length(hosts_lost))
+
+      for (i in seq_along(ext_order)) {
+      
+          print(paste("rep:",j, "--", i, "of", length(hosts_lost), "hosts removed"))
+
+          hosts_to_remove <- hosts_lost[ext_order[1:i]]
+          hp_list_small <- hp_list_impacted[!hp_list_impacted$host%in%hosts_to_remove,]
+          
+          if(nrow(hp_list_small)>0){ # doing this in case all parasites go extinct
+              
+              new_mpd <- calc_mpd(hp_list_small, coph)
+              new_mpd$n_hosts_removed <- i
+              new_mpd$rep_n <- j
+              t_cruzi_noext$rep_n <- j #bind initial state for plotting
+              t_cruzi <- rbind(t_cruzi_noext,t_cruzi, new_mpd)
+      
+        }
+      }      
+}
+
+saveRDS(t_cruzi, "t_cruzi_simExt.rds")
+
+t_cruzi_plot <- t_cruzi %>%
+  ggplot( aes(x=n_hosts_removed, y=mpd, group=as.factor(rep_n))) +
+    geom_line(alpha=0.15, size=0.25) + theme_classic() +
+    xlab("Number of hosts lost") + ylab("MPD") +
+    scale_x_continuous(expand = c(0, 0), limits = c(0, 58)) + 
+    scale_y_continuous(expand = c(0, 0), limits = c(120, 240)) 
+
+     
+ggsave("../plots_tables/t_cruzi.pdf", t_cruzi_plot, width=5, height=3)
+ggsave("../plots_tables/t_cruzi.png", t_cruzi_plot, width=5, height=3)
+
+
+library("cowplot")
+plot_grid(mpd_changes_plot, t_cruzi_plot, 
+          labels = c("A)", "B)"),
+          nrow = 2, label_size=11, hjust=0)
+
+ggsave("../plots_tables/future_ext_paired.pdf", width=5, height=6)
+ggsave("../plots_tables/future_ext_paired.png", width=5, height=6)
+
+```
